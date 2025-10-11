@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* optional: hide default scrollbar for horizontal category */
+::-webkit-scrollbar { height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 8px; }
