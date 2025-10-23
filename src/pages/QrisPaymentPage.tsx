@@ -1,3 +1,4 @@
+// src/pages/QRISPaymentPage.tsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -9,66 +10,189 @@ export default function QRISPaymentPage() {
   const { orderId } = useParams();
   const [order, setOrder] = useState<any>(null);
   const [qrUrl, setQrUrl] = useState("");
+  const [baseQris, setBaseQris] = useState("");
 
+  // Ambil BASE QRIS dari Firestore
   useEffect(() => {
-    if (!orderId) return;
-    const unsub = onSnapshot(doc(db, "orders", orderId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setOrder(data);
-
-        // Generate QR dinamis
-        if (data.paymentMethod === "qris" && data.total) {
-          const dynamicQris = generateDynamicQris(BASE_QRIS, data.total);
-          setQrUrl(
-            `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
-              dynamicQris
-            )}&size=250x250`
-          );
-        }
-      } else setOrder(null);
+    const docRef = doc(db, "settings", "qris_base");
+    const unsub = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) setBaseQris(snap.data().value);
     });
     return () => unsub();
-  }, [orderId]);
+  }, []);
 
-  if (!order) return <div className="p-6 text-center">Order tidak ditemukan.</div>;
+  // Ambil data order dari Firestore
+  useEffect(() => {
+    if (!orderId) return;
+    const unsub = onSnapshot(doc(db, "orders", orderId), (snap) => {
+      if (!snap.exists()) {
+        setOrder(null);
+        return;
+      }
+
+      const data = snap.data();
+      setOrder(data);
+
+      // Generate QR dinamis
+      if (data.paymentMethod === "qris" && data.total && baseQris) {
+        const dynamicQris = generateDynamicQris(baseQris, data.total);
+        setQrUrl(
+          `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
+            dynamicQris
+          )}&size=300x300`
+        );
+      }
+    });
+    return () => unsub();
+  }, [orderId, baseQris]);
+
+  // 🔽 Fungsi Download Gambar QR
+  const handleDownload = () => {
+    if (!qrUrl) return;
+    fetch(qrUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `QRIS_${orderId || "order"}.png`;
+        link.click();
+      });
+  };
+
+  if (!order)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-gray-500 text-center">🔍 Order tidak ditemukan.</div>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-md text-center">
-        <h1 className="text-2xl font-bold mb-4">QRIS Pembayaran</h1>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+        <h1 className="text-2xl font-semibold text-slate-800 text-center mb-6">
+          Pembayaran dengan QRIS
+        </h1>
 
-        {qrUrl && <img src={qrUrl} alt="QRIS" className="mx-auto mb-4 w-40 h-40 object-contain border rounded-lg" />}
+        {/* Info Meja */}
+        {order.table && (
+          <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-center py-2 rounded-lg shadow-md mb-6">
+            🍽️ Dine-in di <span className="font-bold">Meja {order.table}</span>
+          </div>
+        )}
 
-        <div className="mb-2 font-semibold text-lg">{formatRp(order.total)}</div>
-        <div className="mb-2">Nama: {order.name}</div>
-        {order.table && <div className="mb-2">Meja: {order.table}</div>}
+        {/* QRIS Card */}
+        <div className="bg-white rounded-2xl shadow-md p-6 mb-6 text-center">
+          <h2 className="text-lg font-semibold text-slate-800 mb-4">
+            Scan QRIS Menggunakan E-Wallet / M-Banking
+          </h2>
+          <div className="text-xl font-semibold text-orange-600 mb-2">
+            {formatRp(order.total)}
+          </div>
+          {qrUrl ? (
+            <>
+              <img
+                src={qrUrl}
+                alt="QRIS"
+                className="mx-auto mb-4 w-56 h-56 object-contain border rounded-xl p-2"
+              />
+              <button
+                onClick={handleDownload}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg shadow transition-all"
+              >
+                Download QRIS
+              </button>
+            </>
+          ) : (
+            <div className="animate-pulse text-gray-400 mb-4">
+              Memuat kode QR...
+            </div>
+          )}
 
-        <div
-          className={`mt-4 p-2 rounded-lg text-white font-semibold text-lg ${
-            order.status === "menunggu pembayaran"
-              ? "bg-orange-500"
-              : order.status === "pesanan sedang dibuat"
-              ? "bg-blue-500"
-              : "bg-green-500"
-          }`}
-        >
-          {order.status === "menunggu pembayaran"
-            ? "Menunggu Pembayaran"
-            : order.status === "pesanan sedang dibuat"
-            ? "Pesanan Sedang Dibuat"
-            : "Pesanan Selesai"}
+
+
+          {/* Progress Bar Status */}
+          <div className="mt-6">
+            <div className="flex justify-between text-sm font-medium mb-1">
+              <span
+                className={`${
+                  order.status === "menunggu pembayaran"
+                    ? "text-orange-500"
+                    : "text-gray-400"
+                }`}
+              >
+                Menunggu Pembayaran
+              </span>
+              <span
+                className={`${
+                  order.status === "pesanan sedang dibuat"
+                    ? "text-blue-500"
+                    : "text-gray-400"
+                }`}
+              >
+                Sedang Dibuat
+              </span>
+              <span
+                className={`${
+                  order.status === "pesanan selesai"
+                    ? "text-green-500"
+                    : "text-gray-400"
+                }`}
+              >
+                Selesai
+              </span>
+            </div>
+
+            <div className="relative h-2 bg-gray-200 rounded-full">
+              <div
+                className={`absolute h-2 rounded-full transition-all duration-500 ${
+                  order.status === "menunggu pembayaran"
+                    ? "bg-orange-500 w-1/3"
+                    : order.status === "pesanan sedang dibuat"
+                    ? "bg-blue-500 w-2/3"
+                    : "bg-green-500 w-full"
+                }`}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rincian Pesanan */}
+        <div className="bg-white rounded-2xl shadow-md p-6">
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">
+            🧾 Rincian Pesanan
+          </h2>
+
+          <div className="mb-4 text-gray-700 font-medium">
+            Nama: <span className="font-semibold">{order.name}</span>
+          </div>
+
+          <div className="divide-y divide-gray-200">
+            {order.items?.map((item: any, idx: number) => (
+              <div key={idx} className="flex justify-between py-2">
+                <div>
+                  <div className="font-medium text-slate-800">{item.name}</div>
+                  <div className="text-sm text-gray-500">
+                    {item.qty} × {formatRp(item.price)}
+                  </div>
+                </div>
+                <div className="font-semibold text-slate-800">
+                  {formatRp(item.price * item.qty)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 border-t pt-3 flex justify-between text-lg font-semibold">
+            <span>Total</span>
+            <span className="text-orange-600">{formatRp(order.total)}</span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// QRIS base statis
-const BASE_QRIS =
-  "00020101021126570011ID.DANA.WWW011893600915335326596902093532659690303UMI51440014ID.CO.QRIS.WWW0215ID10222268737870303UMI5204549953033605802ID5913RAMADHANKUKUH6013Kota Semarang6105501496304D46C";
-
-// Fungsi hitung CRC16
+// 🔢 Hitung CRC16
 function crc16(str: string) {
   let crc = 0xffff;
   for (let c = 0; c < str.length; c++) {
@@ -83,14 +207,16 @@ function crc16(str: string) {
   return hex;
 }
 
-// Fungsi QRIS dinamis
+// 💡 Generate QRIS Dinamis
 function generateDynamicQris(base: string, amount: number): string {
   let qris = base.slice(0, -4);
   qris = qris.replace("010211", "010212");
   const parts = qris.split("5802ID");
   if (parts.length !== 2) return base;
+
   const amtStr = amount.toString();
   const uangTag = "54" + amtStr.length.toString().padStart(2, "0") + amtStr;
+
   const fixed = parts[0] + uangTag + "5802ID" + parts[1];
   return fixed + crc16(fixed);
 }

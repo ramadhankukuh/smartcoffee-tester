@@ -4,26 +4,22 @@ import OrderPage from "./pages/OrderPage";
 import SearchPage from "./pages/SearchPage";
 import PaymentPage from "./pages/PaymentPage";
 import AdminDashboard from "./pages/AdminDashboard";
-import CashierPage from "./pages/CashierPage";
 import LoginPage from "./pages/LoginPage";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebaseConfig";
 import QrisPaymentPage from "./pages/QrisPaymentPage";
+import ViewOrderPage from "./pages/ViewOrderPage";
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
     });
     return () => unsub();
   }, []);
-
-  if (loading) return <div className="text-center p-6">Loading...</div>;
 
   return (
     <Routes>
@@ -33,13 +29,7 @@ export default function App() {
       <Route path="/search" element={<SearchPage />} />
       <Route path="/payment" element={<PaymentPage />} />
       <Route path="/qris-payment/:orderId" element={<QrisPaymentPage />} />
-
-
-      {/* Halaman Kasir */}
-      <Route
-        path="/cashier"
-        element={user ? <CashierPage /> : <Navigate to="/login" replace />}
-      />
+      <Route path="/view-order" element={<ViewOrderPage />} />
 
       {/* Halaman Admin */}
       <Route path="/login" element={<LoginPage />} />
