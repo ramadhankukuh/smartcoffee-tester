@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { db, auth } from "../firebaseConfig";
-import { setDoc } from "firebase/firestore";
 import Swal from "sweetalert2";
-
 import {
   collection,
   addDoc,
@@ -10,6 +8,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  setDoc,
   onSnapshot,
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -18,7 +17,7 @@ import { useNavigate } from "react-router-dom";
 type Order = {
   name: string;
   table?: string;
-  note?: string; // <--- Tambahkan ini
+  note?: string;
   items: { name: string; qty: number }[];
   total: number;
   paymentMethod: string;
@@ -26,10 +25,12 @@ type Order = {
   createdAt: any;
 };
 
-
 type Table = { id: string; name: string; type: "Indoor" | "Outdoor" };
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
+
+  /** ===== State Tabs ===== */
   const [activeTab, setActiveTab] = useState<
     "menu" | "kasir" | "penjualan" | "pengaturan"
   >("menu");
@@ -45,73 +46,17 @@ export default function AdminDashboard() {
     img: "",
   });
   const [loadingMenu, setLoadingMenu] = useState(true);
-  const colRef = collection(db, "menus");
+  const menusColRef = collection(db, "menus");
 
-  /** ===== Categories States ===== */
+  /** ===== Category States ===== */
   const [categories, setCategories] = useState<any[]>([]);
   const [catForm, setCatForm] = useState({ id: "", name: "" });
-  const catsColRef = collection(db, "categories");
+  const categoriesColRef = collection(db, "categories");
 
-  async function fetchCategories() {
-    const snapshot = await getDocs(catsColRef);
-    setCategories(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }
-
-  async function handleSubmitCategory(e: React.FormEvent) {
-    e.preventDefault();
-    if (catForm.id) {
-      await updateDoc(doc(db, "categories", catForm.id), {
-        name: catForm.name,
-      });
-    } else {
-      await addDoc(catsColRef, { name: catForm.name });
-    }
-    setCatForm({ id: "", name: "" });
-    fetchCategories();
-  }
-
-  async function handleDeleteCategory(id: string, name: string) {
-    const result = await Swal.fire({
-      title: "Hapus Kategori?",
-      text: `Apakah kamu yakin ingin menghapus kategori "${name}"?`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Ya, Hapus",
-      cancelButtonText: "Batal",
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deleteDoc(doc(db, "categories", id));
-        Swal.fire(
-          "Dihapus!",
-          `Kategori "${name}" berhasil dihapus.`,
-          "success"
-        );
-      } catch (err) {
-        console.error("Gagal menghapus kategori:", err);
-        Swal.fire("Error", "Gagal menghapus kategori!", "error");
-      }
-    }
-  }
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const snapshot = await getDocs(collection(db, "categories"));
-      const data = snapshot.docs
-        .map((d) => ({ id: d.id, ...(d.data() as any) }))
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      setCategories(data);
-    };
-    fetchCategories();
-  }, []);
-
-  /** ===== Kasir States ===== */
+  /** ===== Orders ===== */
   const [orders, setOrders] = useState<{ id: string; data: Order }[]>([]);
 
-  /** ===== Pengaturan States ===== */
+  /** ===== Tables ===== */
   const [tables, setTables] = useState<Table[]>([]);
   const [tableForm, setTableForm] = useState({
     id: "",
@@ -123,66 +68,142 @@ export default function AdminDashboard() {
 
   /** ===== QRIS Base ===== */
   const [baseQris, setBaseQris] = useState("");
-  const navigate = useNavigate();
 
-  /** ===== Logout ===== */
-  async function handleLogout() {
+  /** ===== Fetch Functions ===== */
+  const fetchMenus = useCallback(async () => {
+    setLoadingMenu(true);
+    const snapshot = await getDocs(menusColRef);
+    setMenus(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setLoadingMenu(false);
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    const snapshot = await getDocs(categoriesColRef);
+    const data = snapshot.docs
+      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    setCategories(data);
+  }, []);
+
+  const fetchTables = useCallback(async () => {
+    setLoadingTables(true);
+    const snapshot = await getDocs(tablesColRef);
+    setTables(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Table[]);
+    setLoadingTables(false);
+  }, []);
+
+  /** ===== Auth ===== */
+  const handleLogout = async () => {
     await signOut(auth);
     localStorage.removeItem("adminToken");
     navigate("/login");
-  }
+  };
 
   /** ===== Menu Handlers ===== */
-  async function fetchMenus() {
-    setLoadingMenu(true);
-    const snapshot = await getDocs(colRef);
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setMenus(data);
-    setLoadingMenu(false);
-  }
-
-  async function handleSubmitMenu(e: React.FormEvent) {
+  const handleSubmitMenu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.id) {
-      await updateDoc(doc(db, "menus", form.id), {
-        name: form.name,
-        desc: form.desc,
-        price: Number(form.price),
-        category: form.category,
-        img: form.img,
-      });
-    } else {
-      await addDoc(colRef, {
-        name: form.name,
-        desc: form.desc,
-        price: Number(form.price),
-        category: form.category,
-        img: form.img,
-      });
-    }
-    setForm({
-      id: "",
-      name: "",
-      desc: "",
-      price: "",
-      category: "",
-      img: "",
-    });
-    fetchMenus();
-  }
+    const payload = {
+      name: form.name,
+      desc: form.desc,
+      price: Number(form.price),
+      category: form.category,
+      img: form.img,
+    };
+    if (form.id) await updateDoc(doc(db, "menus", form.id), payload);
+    else await addDoc(menusColRef, payload);
 
-  async function handleDeleteMenu(id: string) {
+    setForm({ id: "", name: "", desc: "", price: "", category: "", img: "" });
+    fetchMenus();
+  };
+
+  const handleDeleteMenu = async (id: string) => {
     await deleteDoc(doc(db, "menus", id));
     fetchMenus();
-  }
+  };
 
-  function handleEditMenu(m: any) {
-    setForm(m);
-  }
+  const handleEditMenu = (menu: any) => setForm(menu);
 
-  /** ===== Kasir Handlers ===== */
+  /** ===== Category Handlers ===== */
+  const handleSubmitCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (catForm.id) await updateDoc(doc(db, "categories", catForm.id), { name: catForm.name });
+    else await addDoc(categoriesColRef, { name: catForm.name });
+    setCatForm({ id: "", name: "" });
+    fetchCategories();
+  };
+
+  const handleDeleteCategory = async (id: string, name: string) => {
+    const result = await Swal.fire({
+      title: "Hapus Kategori?",
+      text: `Apakah kamu yakin ingin menghapus kategori "${name}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Ya, Hapus",
+      cancelButtonText: "Batal",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    });
+
+    if (!result.isConfirmed) return;
+    try {
+      await deleteDoc(doc(db, "categories", id));
+      await fetchCategories();
+      Swal.fire("Dihapus!", `Kategori "${name}" berhasil dihapus.`, "success");
+    } catch (err) {
+      console.error("Gagal menghapus kategori:", err);
+      Swal.fire("Error", "Gagal menghapus kategori!", "error");
+    }
+  };
+
+  const moveCategory = async (from: number, to: number) => {
+    const newCats = [...categories];
+    const [moved] = newCats.splice(from, 1);
+    newCats.splice(to, 0, moved);
+    setCategories(newCats);
+
+    for (let i = 0; i < newCats.length; i++) {
+      await updateDoc(doc(db, "categories", newCats[i].id), { order: i });
+    }
+  };
+
+  /** ===== Orders Handlers ===== */
+  const markPaid = async (id: string) => updateDoc(doc(db, "orders", id), { status: "pesanan sedang dibuat" });
+  const markFinished = async (id: string) => updateDoc(doc(db, "orders", id), { status: "pesanan selesai" });
+  const deleteOrder = async (id: string) => deleteDoc(doc(db, "orders", id));
+
+  /** ===== Tables Handlers ===== */
+  const handleSubmitTable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (tableForm.id) await updateDoc(doc(db, "tables", tableForm.id), tableForm);
+    else await addDoc(tablesColRef, tableForm);
+    setTableForm({ id: "", name: "", type: "Indoor" });
+    fetchTables();
+  };
+
+  const handleDeleteTable = async (id: string) => {
+    await deleteDoc(doc(db, "tables", id));
+    fetchTables();
+  };
+
+  const handleEditTable = (t: Table) => setTableForm(t);
+
+  /** ===== QRIS Handlers ===== */
+  const handleSaveQrisBase = async () => {
+    try {
+      await setDoc(doc(db, "settings", "qris_base"), { value: baseQris }, { merge: true });
+      alert("QRIS base berhasil disimpan!");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan QRIS base.");
+    }
+  };
+
+  /** ===== useEffect ===== */
   useEffect(() => {
     fetchMenus();
+    fetchCategories();
+    fetchTables();
+
     const unsub = onSnapshot(collection(db, "orders"), (snap) => {
       const docs = snap.docs
         .map((d) => ({ id: d.id, data: d.data() as Order }))
@@ -190,148 +211,43 @@ export default function AdminDashboard() {
       setOrders(docs);
     });
     return () => unsub();
-  }, []);
-
-  const markPaid = async (id: string) =>
-    await updateDoc(doc(db, "orders", id), { status: "pesanan sedang dibuat" });
-  const markFinished = async (id: string) =>
-    await updateDoc(doc(db, "orders", id), { status: "pesanan selesai" });
-  const deleteOrder = async (id: string) =>
-    await deleteDoc(doc(db, "orders", id));
-
-  /** ===== Pengaturan Meja Handlers ===== */
-  async function fetchTables() {
-    setLoadingTables(true);
-    const snapshot = await getDocs(tablesColRef);
-    const data = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    })) as Table[];
-    setTables(data);
-    setLoadingTables(false);
-  }
-
-  async function handleSubmitTable(e: React.FormEvent) {
-    e.preventDefault();
-    if (tableForm.id) {
-      await updateDoc(doc(db, "tables", tableForm.id), {
-        name: tableForm.name,
-        type: tableForm.type,
-      });
-    } else {
-      await addDoc(tablesColRef, {
-        name: tableForm.name,
-        type: tableForm.type,
-      });
-    }
-    setTableForm({ id: "", name: "", type: "Indoor" });
-    fetchTables();
-  }
-
-  async function handleDeleteTable(id: string) {
-    await deleteDoc(doc(db, "tables", id));
-    fetchTables();
-  }
-
-  function handleEditTable(t: Table) {
-    setTableForm(t);
-  }
+  }, [fetchMenus, fetchCategories, fetchTables]);
 
   useEffect(() => {
-    fetchTables();
-  }, []);
-  async function moveCategory(from: number, to: number) {
-    const newCats = [...categories];
-    const [moved] = newCats.splice(from, 1);
-    newCats.splice(to, 0, moved);
-
-    // update state agar langsung kelihatan
-    setCategories(newCats);
-
-    // update order ke Firestore
-    for (let i = 0; i < newCats.length; i++) {
-      const ref = doc(db, "categories", newCats[i].id);
-      await updateDoc(ref, { order: i });
-    }
-  }
-
-  /** ===== QRIS Base Handlers ===== */
-  useEffect(() => {
-    const docRef = doc(db, "settings", "qris_base");
-    const unsub = onSnapshot(docRef, (snap) => {
+    const unsub = onSnapshot(doc(db, "settings", "qris_base"), (snap) => {
       if (snap.exists()) setBaseQris(snap.data().value);
     });
     return () => unsub();
   }, []);
 
-  async function handleSaveQrisBase() {
-    try {
-      const docRef = doc(db, "settings", "qris_base");
-      await setDoc(docRef, { value: baseQris }, { merge: true });
-      alert("QRIS base berhasil disimpan!");
-    } catch (err) {
-      console.error(err);
-      alert("Gagal menyimpan QRIS base.");
-    }
-  }
-
   /** ===== Statistik ===== */
   const totalMenu = menus.length;
-
-  // Hitung jumlah menu berdasarkan kategori dari Firestore
-  const categoryStats = categories.map((cat) => {
-    const count = menus.filter((m) => m.category === cat.name).length;
-    return { name: cat.name, count };
-  });
-
-  const activeOrdersCount = orders.filter(
-    (o) => o.data.status !== "pesanan selesai"
-  ).length;
-
+  const categoryStats = categories.map((cat) => ({
+    name: cat.name,
+    count: menus.filter((m) => m.category === cat.name).length,
+  }));
+  const activeOrdersCount = orders.filter((o) => o.data.status !== "pesanan selesai").length;
   const totalPenjualan = orders.reduce((acc, o) => acc + o.data.total, 0);
-  const totalPesananSelesai = orders.filter(
-    (o) => o.data.status === "pesanan selesai"
-  ).length;
+  const totalPesananSelesai = orders.filter((o) => o.data.status === "pesanan selesai").length;
 
+  /** ===== Render ===== */
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <aside className="w-64 bg-gray-800 text-white flex flex-col">
         <div className="p-6 text-2xl font-bold">SmartCoffee</div>
         <nav className="flex flex-col gap-2 p-4">
-          <button
-            onClick={() => setActiveTab("penjualan")}
-            className={`py-2 px-3 rounded hover:bg-gray-700 transition ${
-              activeTab === "penjualan" ? "bg-gray-700" : ""
-            }`}
-          >
-            Penjualan
-          </button>
-          <button
-            onClick={() => setActiveTab("kasir")}
-            className={`py-2 px-3 rounded hover:bg-gray-700 transition ${
-              activeTab === "kasir" ? "bg-gray-700" : ""
-            }`}
-          >
-            Kasir
-          </button>
-          <button
-            onClick={() => setActiveTab("menu")}
-            className={`py-2 px-3 rounded hover:bg-gray-700 transition ${
-              activeTab === "menu" ? "bg-gray-700" : ""
-            }`}
-          >
-            Menu
-          </button>
-          <button
-            onClick={() => setActiveTab("pengaturan")}
-            className={`py-2 px-3 rounded hover:bg-gray-700 transition ${
-              activeTab === "pengaturan" ? "bg-gray-700" : ""
-            }`}
-          >
-            Pengaturan
-          </button>
-
+          {["penjualan", "kasir", "menu", "pengaturan"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as typeof activeTab)}
+              className={`py-2 px-3 rounded hover:bg-gray-700 transition ${
+                activeTab === tab ? "bg-gray-700" : ""
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
           <button
             onClick={handleLogout}
             className="mt-4 py-2 px-3 rounded bg-red-600 hover:bg-red-700 transition"
