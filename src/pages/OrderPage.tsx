@@ -99,6 +99,26 @@ export default function OrderPage() {
     }
   }, [mode, tableFromURL, tables]);
 
+  const handleExitTable = () => {
+  Swal.fire({
+    title: "Keluar dari Dine-in?",
+    text: "Apakah Anda yakin ingin keluar atau ganti meja?",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Keluar",
+    cancelButtonText: "Batal",
+  }).then((result) => {
+    if (result.isConfirmed) {
+      setTableNumber("");
+      setSearchParams({ mode: "dinein" });
+      setTableModalOpen(true);
+    }
+  });
+};
+
+
   /** ===== Fetch Categories ===== */
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "categories"), (snapshot) => {
@@ -224,18 +244,29 @@ export default function OrderPage() {
       </div>
 
       {/* ===== Info Meja Dine-in ===== */}
-      {mode === "dinein" && tableNumber && (
-        <div className="max-w-4xl mx-auto px-4 md:px-6 mt-4">
-          <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-center py-2 rounded-lg shadow-md">
-            🍽️ Anda sedang dine-in di <span className="font-bold">Meja {tableNumber}</span>
-          </div>
-        </div>
-      )}
+{mode === "dinein" && tableNumber && (
+  <div className="max-w-4xl mx-auto px-4 md:px-6 mt-4">
+    <div className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-red-500 text-white py-2 px-4 rounded-lg shadow-md">
+      <div className="flex items-center gap-2">
+        <span>Anda sedang dine-in di</span>
+        <span className="font-bold">{tableNumber}</span>
+      </div>
+      <button
+        onClick={handleExitTable}
+        className="bg-white/20 hover:bg-white/30 text-white text-sm px-3 py-1 rounded-lg transition"
+      >
+        Keluar
+      </button>
+    </div>
+  </div>
+)}
+
+
 
       {/* ===== Daftar Menu & Best Seller ===== */}
       <main className="max-w-4xl mx-auto px-4 md:px-6 py-6">
         <section className="mb-10">
-          <h2 className="text-xl font-bold text-slate-800 mb-4">🔥 Best Seller</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-4">BEST SELLER</h2>
           <div className="overflow-x-auto scroll-smooth snap-x snap-mandatory pb-3 hide-scrollbar">
             <div className="flex gap-4">
               {bestsellers.map((b) => {

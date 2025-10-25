@@ -73,14 +73,14 @@ export default function AdminDashboard() {
   const fetchMenus = useCallback(async () => {
     setLoadingMenu(true);
     const snapshot = await getDocs(menusColRef);
-    setMenus(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setMenus(snapshot.docs.map((d) => ({ ...(d.data() as any), id: d.id })));
     setLoadingMenu(false);
   }, []);
 
   const fetchCategories = useCallback(async () => {
     const snapshot = await getDocs(categoriesColRef);
     const data = snapshot.docs
-      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .map((d) => ({ ...(d.data() as any), id: d.id }))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     setCategories(data);
   }, []);
@@ -88,7 +88,9 @@ export default function AdminDashboard() {
   const fetchTables = useCallback(async () => {
     setLoadingTables(true);
     const snapshot = await getDocs(tablesColRef);
-    setTables(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Table[]);
+    setTables(
+      snapshot.docs.map((d) => ({ ...(d.data() as any), id: d.id })) as Table[]
+    );
     setLoadingTables(false);
   }, []);
 
@@ -126,7 +128,10 @@ export default function AdminDashboard() {
   /** ===== Category Handlers ===== */
   const handleSubmitCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (catForm.id) await updateDoc(doc(db, "categories", catForm.id), { name: catForm.name });
+    if (catForm.id)
+      await updateDoc(doc(db, "categories", catForm.id), {
+        name: catForm.name,
+      });
     else await addDoc(categoriesColRef, { name: catForm.name });
     setCatForm({ id: "", name: "" });
     fetchCategories();
@@ -167,22 +172,84 @@ export default function AdminDashboard() {
   };
 
   /** ===== Orders Handlers ===== */
-  const markPaid = async (id: string) => updateDoc(doc(db, "orders", id), { status: "pesanan sedang dibuat" });
-  const markFinished = async (id: string) => updateDoc(doc(db, "orders", id), { status: "pesanan selesai" });
+  const markPaid = async (id: string) =>
+    updateDoc(doc(db, "orders", id), { status: "pesanan sedang dibuat" });
+  const markFinished = async (id: string) =>
+    updateDoc(doc(db, "orders", id), { status: "pesanan selesai" });
   const deleteOrder = async (id: string) => deleteDoc(doc(db, "orders", id));
 
   /** ===== Tables Handlers ===== */
   const handleSubmitTable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (tableForm.id) await updateDoc(doc(db, "tables", tableForm.id), tableForm);
-    else await addDoc(tablesColRef, tableForm);
-    setTableForm({ id: "", name: "", type: "Indoor" });
-    fetchTables();
+    const payload = { name: tableForm.name.trim(), type: tableForm.type };
+
+    // ambil semua meja dan cek duplikat (case-insensitive untuk name)
+    const snapshot = await getDocs(tablesColRef);
+    const duplicate = snapshot.docs.find((d) => {
+      const data = d.data() as any;
+      return (
+        data.name?.toString().toLowerCase() === payload.name.toLowerCase() &&
+        data.type === payload.type &&
+        d.id !== tableForm.id // jika update, abaikan dokumen yang sedang di-edit
+      );
+    });
+
+    if (duplicate) {
+      Swal.fire(
+        "Duplikat Meja",
+        `Meja dengan nama "${payload.name}" dan tipe "${payload.type}" sudah ada.`,
+        "error"
+      );
+      return;
+    }
+
+    try {
+      if (tableForm.id) {
+        await updateDoc(doc(db, "tables", tableForm.id), payload);
+      } else {
+        await addDoc(tablesColRef, payload);
+      }
+      setTableForm({ id: "", name: "", type: "Indoor" });
+      fetchTables();
+      Swal.fire(
+        "Sukses",
+        tableForm.id ? "Meja diperbarui." : "Meja ditambahkan.",
+        "success"
+      );
+    } catch (err) {
+      console.error("Gagal menyimpan meja:", err);
+      Swal.fire("Error", "Gagal menyimpan meja.", "error");
+    }
   };
 
-  const handleDeleteTable = async (id: string) => {
-    await deleteDoc(doc(db, "tables", id));
-    fetchTables();
+  const handleDeleteTable = async (id?: string) => {
+    if (!id) {
+      console.error("Invalid table id:", id);
+      Swal.fire("Error", "ID meja tidak valid.", "error");
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "Hapus Meja?",
+      text: `Apakah kamu yakin ingin menghapus meja ini?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Ya, Hapus",
+      cancelButtonText: "Batal",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "tables", id));
+      await fetchTables();
+      Swal.fire("Dihapus!", "Meja berhasil dihapus.", "success");
+    } catch (err) {
+      console.error("Gagal menghapus meja:", err);
+      Swal.fire("Error", "Gagal menghapus meja.", "error");
+    }
   };
 
   const handleEditTable = (t: Table) => setTableForm(t);
@@ -190,7 +257,11 @@ export default function AdminDashboard() {
   /** ===== QRIS Handlers ===== */
   const handleSaveQrisBase = async () => {
     try {
-      await setDoc(doc(db, "settings", "qris_base"), { value: baseQris }, { merge: true });
+      await setDoc(
+        doc(db, "settings", "qris_base"),
+        { value: baseQris },
+        { merge: true }
+      );
       alert("QRIS base berhasil disimpan!");
     } catch (err) {
       console.error(err);
@@ -222,13 +293,19 @@ export default function AdminDashboard() {
 
   /** ===== Statistik ===== */
   const totalMenu = menus.length;
+  // include id so we can use a stable unique key when rendering stats
   const categoryStats = categories.map((cat) => ({
+    id: cat.id,
     name: cat.name,
     count: menus.filter((m) => m.category === cat.name).length,
   }));
-  const activeOrdersCount = orders.filter((o) => o.data.status !== "pesanan selesai").length;
+  const activeOrdersCount = orders.filter(
+    (o) => o.data.status !== "pesanan selesai"
+  ).length;
   const totalPenjualan = orders.reduce((acc, o) => acc + o.data.total, 0);
-  const totalPesananSelesai = orders.filter((o) => o.data.status === "pesanan selesai").length;
+  const totalPesananSelesai = orders.filter(
+    (o) => o.data.status === "pesanan selesai"
+  ).length;
 
   /** ===== Render ===== */
   return (
@@ -270,7 +347,7 @@ export default function AdminDashboard() {
 
               {categoryStats.map((cat) => (
                 <div
-                  key={cat.name}
+                  key={cat.id || cat.name}
                   className="bg-white p-4 rounded shadow flex flex-col items-center"
                 >
                   <span className="text-gray-500 text-sm">{cat.name}</span>
@@ -325,7 +402,9 @@ export default function AdminDashboard() {
                   >
                     <option value="">-- Pilih Kategori --</option>
                     {categories.map((c) => (
-                      <option key={c.id}>{c.name}</option>
+                      <option key={c.id || c.name} value={c.name}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                   <input
@@ -375,7 +454,7 @@ export default function AdminDashboard() {
                   <ul className="space-y-2">
                     {categories.map((cat, i) => (
                       <li
-                        key={cat.id}
+                        key={cat.id || `${cat.name}-${i}`}
                         className="flex items-center justify-between border-b py-2"
                       >
                         <span>{cat.name}</span>
@@ -417,7 +496,10 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {menus.map((m) => (
                   <div
-                    key={m.id}
+                    key={
+                      m.id ||
+                      `${m.name}-${m.price}-${Math.max(0, menus.indexOf(m))}`
+                    }
                     className="bg-white rounded-lg shadow hover:shadow-md transition flex flex-col"
                   >
                     <div className="relative w-full h-40 overflow-hidden rounded-t-lg">
@@ -472,9 +554,9 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {orders
                   .filter((o) => o.data.status !== "pesanan selesai")
-                  .map(({ id, data }) => (
+                  .map(({ id, data }, i) => (
                     <div
-                      key={id}
+                      key={id || `${i}-${data.name ?? "order"}`}
                       className={`p-4 rounded-xl shadow flex flex-col justify-between
             ${
               data.status === "menunggu pembayaran"
@@ -499,11 +581,11 @@ export default function AdminDashboard() {
                             .map((item) => `${item.name} x${item.qty}`)
                             .join(", ")}
                         </div>
-{data.note && (
-  <div className="text-gray-700 mb-1">
-    Catatan: <span className="italic">{data.note}</span>
-  </div>
-)}
+                        {data.note && (
+                          <div className="text-gray-700 mb-1">
+                            Catatan: <span className="italic">{data.note}</span>
+                          </div>
+                        )}
 
                         <div>
                           Status:{" "}
@@ -551,9 +633,9 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {orders
                     .filter((o) => o.data.status === "pesanan selesai")
-                    .map(({ id, data }) => (
+                    .map(({ id, data }, i) => (
                       <div
-                        key={id}
+                        key={id || `${i}-${data.name ?? "order"}`}
                         className="p-4 rounded-xl shadow bg-green-50 flex flex-col justify-between transition"
                       >
                         <div>
@@ -573,11 +655,12 @@ export default function AdminDashboard() {
                               .map((item) => `${item.name} x${item.qty}`)
                               .join(", ")}
                           </div>
-{data.note && (
-  <div className="text-gray-700 mb-1">
-    Catatan: <span className="italic">{data.note}</span>
-  </div>
-)}
+                          {data.note && (
+                            <div className="text-gray-700 mb-1">
+                              Catatan:{" "}
+                              <span className="italic">{data.note}</span>
+                            </div>
+                          )}
 
                           <div>
                             Status:{" "}
@@ -678,7 +761,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {tables.map((t) => (
                     <div
-                      key={t.id}
+                      key={t.id || `${t.name}-${t.type}-${tables.indexOf(t)}`}
                       className="bg-gray-50 p-3 rounded shadow flex justify-between items-center"
                     >
                       <div>

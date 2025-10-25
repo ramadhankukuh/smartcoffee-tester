@@ -101,9 +101,101 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
           </div>
         )}
 
-        {/* Ringkasan Pesanan */}
+
+
+{/* Form Pembayaran */}
+<div className="bg-white rounded-2xl shadow-md p-6 mb-6">
+  <h2 className="text-lg font-semibold text-slate-800 mb-3">🧍‍♂️ Data Pemesan</h2>
+
+  <form onSubmit={handleSubmit} className="space-y-5">
+    {/* Input Data */}
+    <div className="space-y-3">
+      <div>
+        <label className="block text-sm font-medium mb-1">Nama*</label>
+        <input
+          type="text"
+          placeholder="Bahlil Lahadalia"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Email*</label>
+        <input
+          type="email"
+          placeholder="lilbahlil@gmail.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">No HP (opsional)</label>
+        <input
+          type="tel"
+          placeholder="081234567890"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+        />
+      </div>
+    </div>
+
+    {/* 💰 Metode Pembayaran */}
+    <div>
+      <h2 className="font-semibold text-lg mb-3 text-gray-700">Metode Pembayaran</h2>
+      <div className="grid grid-cols-2 gap-4 sm:max-w-xs">
+
+        {["qris", "cash"].map((m) => (
+          <label
+            key={m}
+            className={`flex flex-col items-center border p-3 rounded-xl cursor-pointer transition ${
+              paymentMethod === m
+                ? "border-orange-500 bg-orange-50"
+                : "border-gray-300 hover:border-orange-400"
+            }`}
+          >
+            <input
+              type="radio"
+              name="payment"
+              value={m}
+              checked={paymentMethod === m}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="hidden"
+            />
+            <span className="text-sm font-medium uppercase">{m}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+
+    {/* Tombol Aksi */}
+    <div className="flex gap-3 pt-2">
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition"
+      >
+        Kembali
+      </button>
+      <button
+        type="submit"
+        className="flex-1 bg-orange-600 py-2 text-white rounded-lg hover:bg-orange-700 transition"
+      >
+        Bayar Sekarang
+      </button>
+    </div>
+  </form>
+</div>
+
+                {/* Ringkasan Pesanan */}
         <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">🧾 Ringkasan</h2>
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">Ringkasan Pesanan</h2>
           <div className="divide-y divide-gray-200">
             {cartItems.map((item) => (
               <div key={item.id} className="flex justify-between py-2">
@@ -123,97 +215,6 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
             <span>Total</span>
             <span className="text-orange-600">{formatRp(total)}</span>
           </div>
-        </div>
-
-        {/* Form Pembayaran */}
-        <div className="bg-white rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">🧍‍♂️ Data Pemesan</h2>
-        <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nama*</label>
-                <input
-                  type="text"
-                  placeholder="Masukkan nama lengkap"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Email*</label>
-                <input
-                  type="email"
-                  placeholder="Masukkan email aktif"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  No HP (opsional)
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Contoh: 081234567890"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-          {/* Metode Pembayaran */}
-          <div>
-            <h2 className="font-semibold text-lg mb-3 text-gray-700">
-              💰 Metode Pembayaran
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {["qris", "gopay", "dana"].map((m) => (
-                <label
-                  key={m}
-                  className={`flex flex-col items-center border p-3 rounded-xl cursor-pointer transition ${
-                    paymentMethod === m
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-gray-300 hover:border-orange-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value={m}
-                    checked={paymentMethod === m}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="hidden"
-                  />
-                  <span className="text-sm font-medium uppercase">{m}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Tombol Aksi */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition"
-            >
-              Kembali
-            </button>
-            <button
-              type="submit"
-              className="flex-1 bg-orange-600 py-2 text-white rounded-lg hover:bg-orange-700 transition"
-            >
-              Bayar Sekarang
-            </button>
-          </div>
-        </form>
         </div>
       </div>
     </div>
